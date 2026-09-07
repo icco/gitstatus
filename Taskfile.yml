@@ -32,7 +32,8 @@ tasks:
   bench:
     desc: Run benchmarks, including the comparison against gitstatus.py
     cmd: GITSTATUS_PY={{.PY}} go test -bench . -benchmem -run '^$' ./...
-    deps: [build]
+    deps:
+      - build
     vars:
       PY: '{{.PY | default "~/.oh-my-zsh/plugins/git-prompt/gitstatus.py"}}'
   clean:
