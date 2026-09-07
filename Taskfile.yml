@@ -1,0 +1,40 @@
+version: "3"
+tasks:
+  default:
+    desc: Build, vet, lint and test
+    cmds:
+      - task: build
+      - task: vet
+      - task: lint
+      - task: test
+  build:
+    desc: Build the binary
+    cmd: go build -o bin/gitstatus .
+  test:
+    desc: Run tests with race detection and coverage
+    cmd: go test -race -coverprofile=coverage.out ./...
+  test:python:
+    desc: Differential test against the gitstatus.py this replaces
+    cmd: GITSTATUS_PY={{.PY}} go test -run Python -v ./...
+    vars:
+      PY: '{{.PY | default "~/.oh-my-zsh/plugins/git-prompt/gitstatus.py"}}'
+  cover:
+    desc: Show per-function coverage
+    cmds:
+      - task: test
+      - go tool cover -func=coverage.out
+  vet:
+    desc: Run go vet
+    cmd: go vet ./...
+  lint:
+    desc: Run golangci-lint
+    cmd: golangci-lint run
+  bench:
+    desc: Run benchmarks, including the comparison against gitstatus.py
+    cmd: GITSTATUS_PY={{.PY}} go test -bench . -benchmem -run '^$' ./...
+    deps: [build]
+    vars:
+      PY: '{{.PY | default "~/.oh-my-zsh/plugins/git-prompt/gitstatus.py"}}'
+  clean:
+    desc: Remove build and coverage artifacts
+    cmd: rm -rf bin dist coverage.out
