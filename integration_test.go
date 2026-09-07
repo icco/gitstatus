@@ -27,8 +27,11 @@ func (r repoState) dirFor(dir string) string {
 	return filepath.Join(dir, r.sub)
 }
 
-func gitDo(t *testing.T, dir string, args ...string) {
-	t.Helper()
+// gitCmd builds a git command isolated from the ambient configuration, with
+// an identity of its own. Every git call in these tests must go through here:
+// a call that inherits the developer's ~/.gitconfig passes locally and then
+// fails on a CI runner that has no user.email configured.
+func gitCmd(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -36,8 +39,24 @@ func gitDo(t *testing.T, dir string, args ...string) {
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
 	)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	return cmd
+}
+
+func gitDo(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := gitCmd(dir, args...).CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+// gitExpectFail runs a git command that is meant to exit non-zero, and fails
+// the test if it unexpectedly succeeds -- otherwise a scenario meant to build
+// a conflict silently produces a clean repository instead.
+func gitExpectFail(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := gitCmd(dir, args...).CombinedOutput(); err == nil {
+		t.Fatalf("git %s: expected a non-zero exit, got success\n%s",
+			strings.Join(args, " "), out)
 	}
 }
 
@@ -174,10 +193,9 @@ func states() []repoState {
 			gitDo(t, d, "checkout", "-q", "main")
 			write(t, d, "a.txt", "main\n")
 			gitDo(t, d, "commit", "-aqm", "main")
-			// Conflicting merge; a non-zero exit here is the point.
-			cmd := exec.Command("git", "merge", "other")
-			cmd.Dir = d
-			_ = cmd.Run()
+			// The conflicting merge. Asserting it fails is what catches an
+			// environment where git refuses for an unrelated reason.
+			gitExpectFail(t, d, "merge", "other")
 		}, "", "main 0 0 0 1 0 0 0 0 0"},
 	}
 }
@@ -206,8 +224,7 @@ func TestRenderOutsideRepo(t *testing.T) {
 	// checking git agrees before asserting.
 	dir := t.TempDir()
 	t.Chdir(dir)
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	if err := cmd.Run(); err == nil {
+	if err := gitCmd(dir, "rev-parse", "--git-dir").Run(); err == nil {
 		t.Skip("temp dir is inside a git repository")
 	}
 	if got := render(); got != "" {
