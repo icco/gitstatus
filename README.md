@@ -10,7 +10,7 @@ Not to be confused with [romkatv/gitstatus], a different and better-known projec
 
 ```bash
 brew install icco/tap/gitstatus        # macOS; casks are macOS-only
-go install github.com/icco/gitstatus@latest
+go install go.icco.me/gitstatus@latest
 ```
 
 ## Use
